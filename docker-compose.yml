@@ -33,6 +33,20 @@ services:
     # Volontairement AUCUN "ports:" ici : Postgres ne doit être joignable
     # que par les autres conteneurs du network, jamais depuis la machine hôte
 
+  stats-api:
+    build: ./stats_api
+    networks:
+      - tasknetwork  
+    environment:
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "8000:8000"
+
+
 networks:
   # Network custom nommé : active la résolution DNS par nom de service
   # (api -> postgres), contrairement au bridge par défaut de Docker.
