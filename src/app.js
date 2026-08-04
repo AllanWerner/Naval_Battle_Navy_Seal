@@ -12,9 +12,33 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// Health check
+// Liveness : répond dès que le process Express tourne, quel que soit
+// l'état de la base. C'est cette route que le HEALTHCHECK Docker utilise,
+// afin que le conteneur de l'API soit "healthy" indépendamment de Postgres
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date() });
+});
+
+// Readiness : reflète l'état réel de la connexion à la base de données.
+// Utile pour un load balancer / une orchestration qui veut savoir si
+// l'API peut réellement traiter des requêtes qui touchent la DB.
+app.get('/ready', (req, res) => {
+  if (db.isReady) {
+    return res.json({ status: 'ready', timestamp: new Date() });
+  }
+  res.status(503).json({ status: 'not ready', timestamp: new Date() });
+});
+
+// Tant que la base n'est pas prête, on répond 503 plutôt que de laisser
+// Sequelize échouer avec une erreur de connexion peu explicite.
+app.use('/api', (req, res, next) => {
+  if (!db.isReady) {
+    return res.status(503).json({
+      success: false,
+      message: 'Service indisponible : connexion à la base de données en cours.'
+    });
+  }
+  next();
 });
 
 // Routes
@@ -29,32 +53,29 @@ app.use(errorHandler);
 // Démarrer le serveur après connexion à la DB
 const PORT = process.env.PORT || 4000;
 
-async function startServer() {
-  try {
-    // Connexion à la base de données
-    await db.sync();
-    
-    app.listen(PORT, () => {
-      console.log(`🚀 Server running on port ${PORT}`);
-      console.log(`📊 Database: ${process.env.DB_NAME || 'taskdb'}`);
-    });
-  } catch (error) {
-    console.error('❌ Failed to start server:', error);
-    process.exit(1);
-  }
-}
+// Le serveur HTTP démarre immédiatement : il ne dépend pas de la
+// disponibilité de Postgres pour démarrer.
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📊 Database: ${process.env.DB_NAME || 'taskdb'}`);
+});
 
-// Gestion des erreurs non capturées
+// La connexion à la base se fait en arrière-plan, avec re-tentatives :
+// si Postgres n'est pas encore là, l'API reste up et /health reste OK ;
+// /ready et /api/* renverront 503 jusqu'à ce que la connexion réussisse.
+db.connectWithRetry();
+
+// Gestion des erreurs non capturées (bugs applicatifs réels, pas les
+// erreurs de connexion DB qui sont gérées par connectWithRetry)
 process.on('uncaughtException', (err) => {
   console.error('💥 Uncaught Exception:', err);
   process.exit(1);
 });
 
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason) => {
   console.error('💥 Unhandled Rejection:', reason);
   process.exit(1);
 });
 
-startServer();
 
 module.exports = app;
