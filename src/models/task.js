@@ -1,72 +1,43 @@
-const crypto = require('crypto');
+const { DataTypes } = require('sequelize');
+const sequelize = require('../config/database');
 
-// Stockage en mémoire (tableau de tâches)
-let tasks = [];
-let nextId = 1;
-
-class TaskModel {
-  // Créer une nouvelle tâche
-  static create(description, status = 'pending') {
-    const task = {
-      id: crypto.randomUUID(),
-      description: description.trim(),
-      status: status || 'pending',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    
-    tasks.push(task);
-    return task;
-  }
-
-  // Récupérer toutes les tâches
-  static getAll() {
-    return tasks;
-  }
-
-  // Récupérer une tâche par son ID
-  static getById(id) {
-    return tasks.find(task => task.id === id);
-  }
-
-  // Mettre à jour une tâche
-  static update(id, description, status) {
-    const taskIndex = tasks.findIndex(task => task.id === id);
-    if (taskIndex === -1) {
-      return null;
+const Task = sequelize.define('Task', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true
+  },
+  title: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    validate: {
+      notEmpty: true,
+      len: [1, 255]
     }
-
-    const task = tasks[taskIndex];
-    
-    if (description !== undefined) {
-      task.description = description.trim();
-    }
-    if (status !== undefined) {
-      task.status = status;
-    }
-    
-    task.updatedAt = new Date().toISOString();
-    tasks[taskIndex] = task;
-    
-    return task;
+  },
+  description: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  status: {
+    type: DataTypes.ENUM('pending', 'in_progress', 'completed'),
+    defaultValue: 'pending'
+  },
+  priority: {
+    type: DataTypes.ENUM('low', 'medium', 'high'),
+    defaultValue: 'medium'
+  },
+  dueDate: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  completedAt: {
+    type: DataTypes.DATE,
+    allowNull: true
   }
+}, {
+  timestamps: true,
+  paranoid: true // Soft delete
+});
 
-  // Supprimer une tâche
-  static delete(id) {
-    const taskIndex = tasks.findIndex(task => task.id === id);
-    if (taskIndex === -1) {
-      return false;
-    }
-    
-    tasks.splice(taskIndex, 1);
-    return true;
-  }
-
-  // Réinitialiser le stockage (utile pour les tests)
-  static reset() {
-    tasks = [];
-    nextId = 1;
-  }
-}
-
-module.exports = TaskModel;
+module.exports = Task;
