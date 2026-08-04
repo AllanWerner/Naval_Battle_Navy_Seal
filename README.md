@@ -305,9 +305,9 @@ Aucune trace de secret trouvée dans les deux images à ce contrôle : seules de
 
 
 | Image | Taille | Couches (poids max) | Build froid / chaud | 
-|---|---|---|---|---|
+|---|---|---|---|
 | `task_api` |266MB | 17(160MB) | 0m7.312s / 0m1.036s| 
-| `stats-api` | 210MB | 21(87.4MB) | 0m5.475s / 0m0.995s  | 
+| `stats-api` | 210MB | 21(87.4MB) | 0m5.475s / 0m0.995s| 
 
 
  Temps 1ère réponse HTTP = 0.711835s
