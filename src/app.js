@@ -26,4 +26,7 @@ app.use(notFoundHandler);
 // Error handling
 app.use(errorHandler);
 
-module.exports = app;
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});

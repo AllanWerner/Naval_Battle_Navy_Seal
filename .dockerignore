@@ -1,8 +1,45 @@
-node_modules
-.git
-.env
-*.log
+# Dépendances
+node_modules/
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Git
+.git/
+.gitignore
+
+# Environnement
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+
+# Fichiers système
 .DS_Store
-dist
-coverage
+Thumbs.db
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# Tests et coverage
+coverage/
+.nyc_output/
+*.test.js
+*.spec.js
+__tests__/
+jest.config.js
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build
+dist/
+build/
