@@ -14,7 +14,7 @@ app.use(express.json({ limit: '10mb' }));
 
 // Liveness : répond dès que le process Express tourne, quel que soit
 // l'état de la base. C'est cette route que le HEALTHCHECK Docker utilise,
-// afin que le conteneur de l'API soit "healthy" indépendamment de Postgres
+// afin que le conteneur de l'API soit "healthy" indépendamment de Postgres.
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date() });
 });
@@ -50,7 +50,6 @@ app.use(notFoundHandler);
 // Error handling
 app.use(errorHandler);
 
-// Démarrer le serveur après connexion à la DB
 const PORT = process.env.PORT || 4000;
 
 // Le serveur HTTP démarre immédiatement : il ne dépend pas de la
@@ -76,6 +75,5 @@ process.on('unhandledRejection', (reason) => {
   console.error('💥 Unhandled Rejection:', reason);
   process.exit(1);
 });
-
 
 module.exports = app;

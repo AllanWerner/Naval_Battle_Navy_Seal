@@ -38,6 +38,7 @@ networks:
   # (api -> postgres), contrairement au bridge par défaut de Docker.
   tasknetwork:
     name: tasknetwork
+    external: true
 
 volumes:
   taskvolume:

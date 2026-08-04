@@ -27,12 +27,12 @@ exports.getTaskById = async (req, res, next) => {
   }
 };
 
-// Créer une nouvelle tâche (validation déjà faite par validateTaskInput)
+// Créer une nouvelle tâche (validation déjà faite par validateTaskCreate)
 exports.createTask = async (req, res, next) => {
   try {
-    // Les données sont déjà validées par validateTaskInput
+    // Les données sont déjà validées par validateTaskCreate (title garanti présent)
     const taskData = {
-      title: req.body.title || 'Sans titre',
+      title: req.body.title,
       description: req.body.description,
       status: req.body.status || 'pending',
       priority: req.body.priority || 'medium',
@@ -60,7 +60,7 @@ exports.createTask = async (req, res, next) => {
   }
 };
 
-// Mettre à jour une tâche (validation déjà faite par validateTaskInput)
+// Mettre à jour une tâche (validation déjà faite par validateTaskUpdate)
 exports.updateTask = async (req, res, next) => {
   try {
     const task = await Task.findByPk(req.params.id);
