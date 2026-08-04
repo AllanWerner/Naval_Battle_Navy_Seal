@@ -1,0 +1,43 @@
+
+services:
+  api:
+    build: .
+    # ${PORT:-4000} : valeur par défaut si PORT n'est pas défini dans .env
+    ports:
+      - "${PORT:-4000}:${PORT:-4000}"
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        # Attend que Postgres soit vraiment prêt à accepter des connexions,
+        # pas seulement que le conteneur ait démarré (voir healthcheck plus bas).
+        condition: service_healthy
+    networks:
+      - tasknetwork
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16.4-alpine
+    env_file:
+      - .env
+    volumes:
+      - taskvolume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - tasknetwork
+    restart: unless-stopped
+    # Volontairement AUCUN "ports:" ici : Postgres ne doit être joignable
+    # que par les autres conteneurs du network, jamais depuis la machine hôte
+
+networks:
+  # Network custom nommé : active la résolution DNS par nom de service
+  # (api -> postgres), contrairement au bridge par défaut de Docker.
+  tasknetwork:
+    name: tasknetwork
+
+volumes:
+  taskvolume:
