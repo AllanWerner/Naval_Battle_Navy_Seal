@@ -1,5 +1,5 @@
 const sequelize = require('../config/database');
-const Task = require('./Task');
+const Task = require('./task');
 
 const db = {
   sequelize,
