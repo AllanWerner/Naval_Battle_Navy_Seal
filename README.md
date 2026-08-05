@@ -77,16 +77,18 @@ docker compose down -v       # ⚠️ supprime aussi les données, irréversible
 | `DB_NAME` | Nom de la base | `taskdb` |
 | `DB_USER` | Utilisateur Postgres | `postgres` |
 | `DB_PASSWORD` | Mot de passe Postgres | *(à définir)* |
-| `PORT` | Port d'écoute de `task_api` | `3000` |
+| `PORT` | Port d'écoute de `task_api` | `4000` |
 
 
 ## Endpoints
 
-### `task_api` — `http://localhost:3000`
+### `task_api` — `http://localhost:4000`
 
 | Méthode | Route | Description |
 |---|---|---|
-| `GET` | `/health` | Vérifie que le service répond |
+| `GET` | `/health` | Vérifie que le service répond (liveness) |
+| `GET` | `/ready` | Vérifie que la base est joignable (readiness) |
+| `GET` | `/metrics` | Métriques Prometheus (texte brut) |
 | `POST` | `/api/tasks` | Crée une tâche |
 | `GET` | `/api/tasks` | Liste toutes les tâches |
 | `GET` | `/api/tasks/:id` | Récupère une tâche |
@@ -103,11 +105,12 @@ docker compose down -v       # ⚠️ supprime aussi les données, irréversible
 Exemple de vérification manuelle :
 
 ```bash
-curl -X POST http://localhost:3000/api/tasks \
+curl -X POST http://localhost:4000/api/tasks \
   -H "Content-Type: application/json" \
-  -d '{"description":"Ma tâche test","status":"pending"}'
+  -d '{"title":"Ma tâche test","status":"pending"}'
 
-curl http://localhost:3000/api/tasks
+curl http://localhost:4000/api/tasks
+curl http://localhost:4000/metrics
 curl http://localhost:8000/stats
 ```
 
@@ -115,16 +118,29 @@ curl http://localhost:8000/stats
 
 ```
 .
+├── .github/workflows/
+│   └── ci-cd.yml            # test → build (Docker Hub) → deploy (SSH, self-hosted)
+├── docs/
+│   └── PROCEDURE_DEPLOIEMENT.md
 ├── src/
 │   ├── routes/tasks.js
 │   ├── models/task.js
 │   ├── middleware/errorHandler.js
+│   ├── metrics.js           # instrumentation Prometheus
 │   └── app.js
 ├── stats_api/
 │   ├── main.py
 │   ├── requirements.txt
 │   └── Dockerfile
+├── tests/
+│   ├── setup.js
+│   └── tasks.test.js
+├── grafana/
+│   ├── provisioning/        # datasource + provider chargés au démarrage
+│   └── dashboards/todo-api.json
 ├── Dockerfile
+├── Dockerfile.vm            # maquette de la machine cible (Docker-in-Docker + SSH)
+├── prometheus.yml
 ├── .dockerignore
 ├── .gitignore
 ├── .env.example
@@ -145,6 +161,46 @@ docker push allanwer/task_api-api:1.0.0
 docker push allanwer/task_api-stats-api:1.0.0
 ```
 
+Depuis le Chapitre 11, cette publication est automatisée par la pipeline (voir ci-dessous) : ces commandes ne servent plus qu'en dépannage manuel.
+
+## Pipeline CI/CD
+
+`.github/workflows/ci-cd.yml`, déclenché sur chaque `push`, trois jobs enchaînés :
+
+| Job | Runner | Rôle |
+|---|---|---|
+| `test` | `ubuntu-latest` | `npm test` contre une vraie Postgres de service (healthcheck) |
+| `build` | `ubuntu-latest` | build des images `task_api-api` et `task_api-stats-api`, taguées au sha du commit + `latest` ; **poussées sur Docker Hub uniquement sur `master`** |
+| `deploy` | `self-hosted` | uniquement sur `master`, après `build` : envoie `docker-compose.prod.yml` / `prometheus.yml` / `grafana/` par SSH vers `/srv/todo`, lance `TAG=<sha> docker compose up -d`, vérifie `/health` |
+
+Une branche de travail fait donc tourner `test` et `build` (sans rien publier ni déployer) ; seul un push sur `master` va jusqu'au déploiement.
+
+**Secrets du dépôt requis** (`Settings > Secrets and variables > Actions`) :
+
+| Secret | Usage |
+|---|---|
+| `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` | authentification Docker Hub (job `build`) |
+| `DEPLOY_SSH_KEY` | clé privée de déploiement, chargée dans un agent SSH éphémère (job `deploy`) — jamais écrite en clair |
+| `DEPLOY_HOST`, `DEPLOY_PORT`, `DEPLOY_USER` | coordonnées de la machine cible |
+
+**Runner self-hosted** : la machine cible de déploiement n'étant pas joignable par les runners hébergés par GitHub, une machine doit être enregistrée comme runner self-hosted (`Settings > Actions > Runners`) avec `./run.sh` **laissé ouvert en continu** — sans lui, le job `deploy` reste `Queued` indéfiniment. Détails dans [`docs/PROCEDURE_DEPLOIEMENT.md`](docs/PROCEDURE_DEPLOIEMENT.md).
+
+## Monitoring
+
+- `task_api` expose `GET /metrics` (texte brut, format Prometheus) : `http_requests_total{method,route,status}`, `http_request_duration_seconds` (histogramme, pour le p95), et `tasks_created_total` (mesure métier).
+- `prometheus.yml` scrape l'API toutes les 5s.
+- Grafana est **pré-configuré** (`grafana/provisioning/`) : datasource Prometheus et dashboard `todo-api.json` chargés automatiquement au démarrage, aucun clic manuel nécessaire.
+- Sur la machine cible (stack `docker-compose.prod.yml`) : Prometheus sur le port `9090`, Grafana sur le port `3001`.
+
+Dashboard (4 golden signals + 1 panneau métier) :
+
+| Panneau | Requête | Question |
+|---|---|---|
+| Disponibilité | `up{job="todo-api"}` | La cible répond-elle ? |
+| Trafic | `sum(rate(http_requests_total{job="todo-api"}[5m]))` | Combien de requêtes/s ? |
+| Erreurs | `sum(rate(http_requests_total{job="todo-api",status=~"5.."}[5m]))` | Part d'erreurs serveur ? |
+| Latence p95 | `histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job="todo-api"}[5m])) by (le))` | p95 du temps de réponse |
+| Tâches créées (bonus) | `tasks_created_total{job="todo-api"}` | Combien de tâches créées depuis le démarrage ? |
 
 ## Journal de bord
 
@@ -339,5 +395,91 @@ chmod +x script_mesure.sh
 ./script_mesure.sh
 ```
 
+### Chapitre 11 — La pipeline déménage sur Task API
+
+`.github/workflows/ci-cd.yml` créé avec les trois jobs `test` / `build` / `deploy` (détails dans la section [Pipeline CI/CD](#pipeline-cicd) plus haut). Règle de déclenchement : `test` et `build` tournent sur tout push ; `build` ne pousse sur Docker Hub que si `github.ref == 'refs/heads/master'` (ce dépôt garde `master` comme branche par défaut, jamais renommée en `main`) ; `deploy` n'est déclenché que sur `master`, après succès de `build`.
+
+### Chapitre 12 — La VM cible (Docker-in-Docker + SSH)
+
+`Dockerfile.vm` construit et lancé localement (`vm-prod`, conteneur privilégié avec son propre Docker et son propre `sshd`), pour servir de machine de production de substitution.
+
+**Ce qui a cassé** : redéfinir `ENTRYPOINT` dans `Dockerfile.vm` sans redéfinir `CMD` fait perdre le `CMD ["dockerd"]` hérité de l'image de base `docker:28-dind` — le conteneur démarrait puis s'arrêtait aussitôt (`docker-entrypoint.sh: parameter not set`). Corrigé en redéclarant `CMD ["dockerd"]` explicitement après l'`ENTRYPOINT`.
+
+**Vérifications passées** :
+- Connexion SSH avec `deploy_key` réussie, `docker run --rm hello-world` exécuté à l'intérieur de la VM.
+- La même connexion sans `-i deploy_key` : refusée (`Permission denied (publickey,password,keyboard-interactive)`).
+- `docker restart vm-prod` puis reconnexion : les images déjà tirées (`hello-world`) sont toujours là — seul `/var/lib/docker` est persisté par le volume nommé `vm-prod-data`, pas `/srv/todo` (attendu : `/srv/todo` vit sur la couche writable du conteneur, effacée si le conteneur est recréé avec `docker rm` + `docker run`, contrairement à un simple `docker restart`).
+
+### Chapitre 13 — Runner self-hosted et job de déploiement
+
+Le job `deploy` du workflow est écrit (`runs-on: self-hosted`, agent SSH, `scp` vers `/srv/todo`, `docker compose up -d`, vérification `/health`). Ce qui reste à faire *en dehors de ce dépôt*, à la charge de l'astreinte :
+1. Enregistrer une machine comme runner self-hosted (`Settings > Actions > Runners > New self-hosted runner`) et laisser `./run.sh` ouvert.
+2. Créer les 6 secrets listés dans la section [Pipeline CI/CD](#pipeline-cicd).
+3. Faire le premier `git push` réel sur `master` pour valider la chaîne complète bout en bout.
+
+### Chapitre 14 — Rejouer, et revenir en arrière
+
+Cycle rejoué manuellement sur `vm-prod` (déploiement SSH + `docker compose`, exactement les commandes que la pipeline exécute) pour obtenir de vraies mesures avant le premier déploiement piloté par GitHub Actions :
+
+| Étape | Commande | Durée mesurée |
+|---|---|---|
+| Déploiement normal (images déjà présentes localement) | `TAG=sha-A docker compose -f docker-compose.prod.yml up -d` puis `/health` OK | **7,6 s** |
+| Redéploiement identique (idempotence) | même commande, même `TAG` | **0,85 s**, tous les conteneurs restent `Running` (aucune recréation) |
+| Déploiement d'une régression volontaire | `TAG=sha-B ...` (image dont le process plante au démarrage) | `todo-api` part en `Restarting` en boucle, `up{job="todo-api"}` passe à **0**, `/health` ne répond plus |
+| Retour arrière | `TAG=sha-A docker compose -f docker-compose.prod.yml up -d` | **3,0 s** jusqu'à `/health` de nouveau `200` ; la tâche créée avant la régression est toujours présente (persistance du volume `taskvolume` non touchée) |
+| Retour arrière vers un tag inexistant | `TAG=sha-inexistant ...` | échoue franchement (`manifest unknown`, code de sortie 1), **aucun conteneur en cours n'est touché** — `todo-api` reste sain pendant l'échec |
+
+La régression utilisée ici est volontairement grossière (process qui `throw` immédiatement) pour obtenir une panne nette et reproductible ; le [script d'incident de la passation](docs/PROCEDURE_DEPLOIEMENT.md#5-pannes-connues-et-leur-signature-dans-le-tableau-de-bord) couvre des pannes plus variées.
+
+### Chapitre 15 — Les tests qui touchent la base, dans la pipeline
+
+`jest` + `supertest`, contre une vraie Postgres (service de la pipeline, ou conteneur jetable en local). Les 4 cas demandés, tous verts :
+
+```
+√ crée une tâche puis la relit par son identifiant
+√ renvoie un 404 propre pour une tâche inexistante
+√ renvoie un 400 sur un corps de requête invalide
+√ supprime une tâche et vérifie qu'elle a disparu
+```
+
+**Ce qui a nécessité un ajustement** : `src/app.js` appelait `app.listen()` et `db.connectWithRetry()` de façon inconditionnelle au chargement du module. En important `app` depuis les tests (`supertest` n'a pas besoin d'un vrai listener réseau), cela ouvrait un second serveur HTTP en plus de celui de `supertest`, laissant un handle ouvert après les tests. Corrigé en encadrant ce bloc d'un `if (require.main === module)` : le comportement en production (`node src/app.js`) est inchangé, les tests peuvent `require()` l'app sans effet de bord réseau.
+
+`tests/setup.js` synchronise le schéma avant le premier test (`connectWithRetry`) et purge la table `Task` après chaque test (`truncate: true, force: true`) pour repartir d'un état connu.
+
+### Chapitre 16 — Rendre l'API mesurable
+
+`src/metrics.js` (prom-client) : compteur `http_requests_total{method,route,status}`, histogramme `http_request_duration_seconds` (p95), compteur métier `tasks_created_total`. Middleware monté avant toutes les routes, y compris pour les 404 non matchées.
+
+**Piège du sujet vérifié** : appeler 3 fois `GET /api/tasks` fait bien augmenter `http_requests_total{method="GET",route="/api/tasks/",status="200"}` de 3, ni plus ni moins. Les routes non trouvées (`GET /route/inconnue`) sont comptées sous un label fixe (`unmatched`), jamais sous l'URL brute — et l'identifiant d'une tâche n'apparaît jamais comme valeur de label (`route="/api/tasks/:id"` pour toutes les tâches, quel que soit leur id).
+
+### Chapitre 17 — Prometheus et Grafana sur la machine cible
+
+Stack complète (`todo-api`, `todo-db`, `todo-stats-api`, `prometheus`, `grafana`) déployée sur `vm-prod` via le `docker-compose.prod.yml` de ce dépôt. Grafana provisionné automatiquement (datasource + dashboard, aucun clic).
+
+**Ce qui a cassé** : le premier mapping de port choisi pour Grafana au lancement de `vm-prod` (`-p 3001:3000`) supposait que Grafana écoutait directement sur le port 3000 *à l'intérieur* de la VM. En réalité, le `docker-compose.prod.yml` publie déjà Grafana sur le port **3001** de la VM (`"3001:3000"` dans le service `grafana`) — il fallait donc mapper le port externe de la VM vers ce même 3001 (`-p 3001:3001`), pas vers 3000. Corrigé ; noté dans `docs/PROCEDURE_DEPLOIEMENT.md` pour la prochaine personne qui relance `vm-prod`.
+
+Relevé (requêtes interrogées directement sur l'API HTTP de Prometheus, mêmes valeurs que les panneaux Grafana) :
+
+| Moment | `up` | Requêtes/s | Taux d'erreur (5xx/s) | p95 |
+|---|---|---|---|---|
+| Au repos | 1 | 0,24 | 0 | 4,8 ms |
+| Pendant la charge (boucle de trafic, 300 requêtes) | 1 | 7,75 | 2,37 (dues aux appels volontaires sur `/api/tasks/inexistant`) | 5,0 ms |
+| Pendant l'incident (`docker stop todo-api`) | **0** (basculé en 0,15 s, largement sous les 15 s attendues) | — | — | — |
+| Pendant une panne base (`docker stop todo-db`) | 1 (l'API elle-même reste vivante) | — | en hausse (`ENOTFOUND postgres`, 500) | — |
+
+Signature bien différente entre les deux pannes testées : arrêt de l'API → `up` à 0 côté Prometheus ; arrêt de la base → `up` reste à 1 mais les requêtes `/api/*` échouent en 5xx. Les deux se rétablissent seules dès que le conteneur arrêté est relancé (`todo-api` en redémarrant, `todo-db` grâce à `connectWithRetry` côté API).
+
+### Chapitre 18 — Procédure de déploiement
+
+Rédigée dans [`docs/PROCEDURE_DEPLOIEMENT.md`](docs/PROCEDURE_DEPLOIEMENT.md) : prérequis, étapes numérotées avec vérification après chacune, retour arrière (commande, critère de déclenchement, qui décide), signature des 5 pannes du script d'incident dans le tableau de bord, durée attendue d'un déploiement (7,6 s à froid une fois les images présentes, cf. Chapitre 14).
+
+### Chapitre 19 — La passation d'astreinte
+
+*À compléter après l'exercice en binôme (nécessite un camarade et le tirage au sort du script d'incident — non simulable en solo).*
+
+| Rôle | Panne tirée | Panneau du dashboard le plus utile | Ligne de procédure manquante | Temps panne → rétablissement |
+|---|---|---|---|---|
+| Pilote | — | — | — | — |
+| Mains | — | — | — | — |
 
 
