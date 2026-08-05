@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const taskRoutes = require('./routes/tasks');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const db = require('./models');
+const { register, metricsMiddleware } = require('./metrics');
 
 const app = express();
 
@@ -11,6 +12,16 @@ const app = express();
 app.use(helmet());
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
+
+// Monté avant toutes les routes pour mesurer chaque requête, y compris
+// les 404 non matchées (sinon les erreurs sont invisibles côté Prometheus).
+app.use(metricsMiddleware);
+
+// Route Prometheus : texte brut, pas JSON.
+app.get('/metrics', async (req, res) => {
+  res.set('Content-Type', register.contentType);
+  res.end(await register.metrics());
+});
 
 // Liveness : répond dès que le process Express tourne, quel que soit
 // l'état de la base. C'est cette route que le HEALTHCHECK Docker utilise,

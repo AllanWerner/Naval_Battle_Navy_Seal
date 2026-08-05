@@ -1,4 +1,5 @@
 const { Task } = require('../models');
+const { tasksCreatedTotal } = require('../metrics');
 
 // Récupérer toutes les tâches
 exports.getAllTasks = async (req, res, next) => {
@@ -40,9 +41,10 @@ exports.createTask = async (req, res, next) => {
     };
 
     const task = await Task.create(taskData);
-    res.status(201).json({ 
-      success: true, 
-      data: task 
+    tasksCreatedTotal.inc();
+    res.status(201).json({
+      success: true,
+      data: task
     });
   } catch (error) {
     // Gestion des erreurs Sequelize (validation, contraintes, etc.)
