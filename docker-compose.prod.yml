@@ -1,7 +1,11 @@
 
 services:
   api:
-    image: allanwer/task_api-api:1.0.0
+    container_name: todo-api
+    # ${TAG:-latest} : le sha du commit poussé par la pipeline (voir job
+    # deploy), ou "latest" par défaut pour un lancement manuel. C'est ce
+    # qui permet un retour arrière : redéployer avec TAG=<sha précédent>.
+    image: allanwer/task_api-api:${TAG:-latest}
     # ${PORT:-4000} : valeur par défaut si PORT n'est pas défini dans .env
     ports:
       - "${PORT:-4000}:${PORT:-4000}"
@@ -17,6 +21,7 @@ services:
     restart: unless-stopped
 
   postgres:
+    container_name: todo-db
     image: postgres:16.4-alpine
     env_file:
       - .env
@@ -34,7 +39,8 @@ services:
     # que par les autres conteneurs du network, jamais depuis la machine hôte
 
   stats-api:
-    image: allanwer/task_api-stats-api:1.0.0
+    container_name: todo-stats-api
+    image: allanwer/task_api-stats-api:${TAG:-latest}
     networks:
       - tasknetwork  
     environment:
