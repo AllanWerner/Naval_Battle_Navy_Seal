@@ -1,0 +1,149 @@
+name: CI/CD
+
+on:
+  push:
+    branches:
+      - '**'
+
+env:
+  DOCKERHUB_API_IMAGE: allanwer/task_api-api
+  DOCKERHUB_STATS_IMAGE: allanwer/task_api-stats-api
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: taskdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d taskdb"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests against a real PostgreSQL
+        run: npm test
+        env:
+          NODE_ENV: test
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: taskdb
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          DB_SSL: false
+
+  build:
+    name: Build & push images
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        if: github.ref == 'refs/heads/master'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build & push task-api image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: ${{ github.ref == 'refs/heads/master' }}
+          tags: |
+            ${{ env.DOCKERHUB_API_IMAGE }}:${{ github.sha }}
+            ${{ env.DOCKERHUB_API_IMAGE }}:latest
+
+      - name: Build & push stats-api image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./stats_api
+          file: ./stats_api/Dockerfile
+          push: ${{ github.ref == 'refs/heads/master' }}
+          tags: |
+            ${{ env.DOCKERHUB_STATS_IMAGE }}:${{ github.sha }}
+            ${{ env.DOCKERHUB_STATS_IMAGE }}:latest
+
+  deploy:
+    name: Deploy to production
+    needs: [build]
+    if: github.ref == 'refs/heads/master'
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Load deploy key into an SSH agent
+        shell: bash
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          eval "$(ssh-agent -s)"
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
+          printf '%s\n' "$DEPLOY_SSH_KEY" | ssh-add -
+          ssh-keyscan -p "$DEPLOY_PORT" "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+
+      - name: Ship the compose stack and monitoring config
+        shell: bash
+        run: |
+          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p /srv/todo"
+          scp -P "$DEPLOY_PORT" docker-compose.prod.yml "$DEPLOY_USER@$DEPLOY_HOST:/srv/todo/docker-compose.prod.yml"
+          scp -P "$DEPLOY_PORT" prometheus.yml "$DEPLOY_USER@$DEPLOY_HOST:/srv/todo/prometheus.yml"
+          scp -P "$DEPLOY_PORT" -r grafana "$DEPLOY_USER@$DEPLOY_HOST:/srv/todo/grafana"
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+
+      - name: Deploy with docker compose
+        shell: bash
+        run: |
+          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "cd /srv/todo && TAG=$GITHUB_SHA docker compose -f docker-compose.prod.yml up -d"
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+
+      - name: Verify /health
+        shell: bash
+        run: |
+          for i in $(seq 1 15); do
+            if ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "curl -sf http://localhost:4000/health"; then
+              echo "API en ligne."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "L'API ne répond pas sur /health après déploiement." >&2
+          exit 1
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
