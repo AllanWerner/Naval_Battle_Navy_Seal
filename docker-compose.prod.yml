@@ -52,6 +52,35 @@ services:
     ports:
       - "8000:8000"
 
+  prometheus:
+    container_name: prometheus
+    image: prom/prometheus:v2.55.1
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - tasknetwork
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  grafana:
+    container_name: grafana
+    image: grafana/grafana:11.2.0
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    networks:
+      - tasknetwork
+    ports:
+      # Port hôte 3001 (3000 documenté dans le sujet) : libre ici, l'API
+      # de ce projet écoute déjà sur 4000.
+      - "3001:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
 
 networks:
   # Network custom nommé : active la résolution DNS par nom de service
@@ -62,3 +91,5 @@ networks:
 
 volumes:
   taskvolume:
+  prometheus-data:
+  grafana-data:

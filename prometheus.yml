@@ -1,0 +1,9 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: todo-api
+    static_configs:
+      # "api" : nom du service Compose (docker-compose.prod.yml), résolu
+      # par le network tasknetwork partagé avec le conteneur Prometheus.
+      - targets: ['api:4000']
