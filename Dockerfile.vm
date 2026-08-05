@@ -23,3 +23,8 @@ RUN chmod 600 /root/.ssh/authorized_keys
 RUN printf '#!/bin/sh\n/usr/sbin/sshd\nexec docker-entrypoint.sh "$@"\n' > /start.sh \
  && chmod +x /start.sh
 ENTRYPOINT ["/start.sh"]
+# Redéfinir ENTRYPOINT sans redéfinir CMD fait perdre le CMD hérité de
+# l'image de base (ici ["dockerd"]) : Docker le remet à vide. On le
+# redéclare explicitement, sinon docker-entrypoint.sh reçoit un "$@" vide
+# et échoue ("parameter not set") au lieu de démarrer le daemon Docker.
+CMD ["dockerd"]
