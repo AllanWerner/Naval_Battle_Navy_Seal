@@ -52,28 +52,34 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 4000;
 
-// Le serveur HTTP démarre immédiatement : il ne dépend pas de la
-// disponibilité de Postgres pour démarrer.
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📊 Database: ${process.env.DB_NAME || 'taskdb'}`);
-});
+// Ne démarre le serveur (et la connexion DB) que lorsque ce fichier est
+// exécuté directement (node src/app.js / conteneur de prod), pas quand il
+// est simplement require() par les tests d'intégration : ceux-ci pilotent
+// l'app via supertest, sans vouloir d'un vrai listener réseau en plus.
+if (require.main === module) {
+  // Le serveur HTTP démarre immédiatement : il ne dépend pas de la
+  // disponibilité de Postgres pour démarrer.
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📊 Database: ${process.env.DB_NAME || 'taskdb'}`);
+  });
 
-// La connexion à la base se fait en arrière-plan, avec re-tentatives :
-// si Postgres n'est pas encore là, l'API reste up et /health reste OK ;
-// /ready et /api/* renverront 503 jusqu'à ce que la connexion réussisse.
-db.connectWithRetry();
+  // La connexion à la base se fait en arrière-plan, avec re-tentatives :
+  // si Postgres n'est pas encore là, l'API reste up et /health reste OK ;
+  // /ready et /api/* renverront 503 jusqu'à ce que la connexion réussisse.
+  db.connectWithRetry();
 
-// Gestion des erreurs non capturées (bugs applicatifs réels, pas les
-// erreurs de connexion DB qui sont gérées par connectWithRetry)
-process.on('uncaughtException', (err) => {
-  console.error('💥 Uncaught Exception:', err);
-  process.exit(1);
-});
+  // Gestion des erreurs non capturées (bugs applicatifs réels, pas les
+  // erreurs de connexion DB qui sont gérées par connectWithRetry)
+  process.on('uncaughtException', (err) => {
+    console.error('💥 Uncaught Exception:', err);
+    process.exit(1);
+  });
 
-process.on('unhandledRejection', (reason) => {
-  console.error('💥 Unhandled Rejection:', reason);
-  process.exit(1);
-});
+  process.on('unhandledRejection', (reason) => {
+    console.error('💥 Unhandled Rejection:', reason);
+    process.exit(1);
+  });
+}
 
 module.exports = app;
