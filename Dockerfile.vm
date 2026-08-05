@@ -1,0 +1,25 @@
+# Maquette de la machine de production : un conteneur qui embarque son
+# propre Docker (Docker-in-Docker) et son propre serveur SSH, pour simuler
+# une vraie VM cible sans en avoir une sous la main.
+FROM docker:28-dind
+
+# openssh-server pour accepter des connexions SSH entrantes ;
+# ssh-keygen -A génère les clés d'hôte du serveur SSH (sinon sshd refuse de démarrer).
+RUN apk add --no-cache openssh-server && ssh-keygen -A
+
+RUN mkdir -p /root/.ssh && chmod 700 /root/.ssh
+
+# Seule la clé publique du binôme "deploy_key" est copiée dans l'image :
+# c'est elle qui autorise la pipeline (côté client) à se connecter en SSH.
+# La clé privée correspondante ne quitte jamais la machine qui la génère.
+COPY deploy_key.pub /root/.ssh/authorized_keys
+RUN chmod 600 /root/.ssh/authorized_keys
+
+# L'image de base docker:28-dind a déjà son propre ENTRYPOINT
+# (docker-entrypoint.sh) qui démarre le daemon Docker interne.
+# On le remplace par un petit script qui lance sshd EN PLUS, puis
+# enchaîne sur l'entrypoint d'origine : la "VM" doit à la fois accepter
+# des connexions SSH et pouvoir exécuter `docker compose` en son sein.
+RUN printf '#!/bin/sh\n/usr/sbin/sshd\nexec docker-entrypoint.sh "$@"\n' > /start.sh \
+ && chmod +x /start.sh
+ENTRYPOINT ["/start.sh"]
