@@ -1,2 +1,7 @@
 node_modules
 .env
+
+# Paire de clés SSH générée localement pour la VM cible mock (Phase 2) :
+# ni la clé privée ni la publique n'ont besoin de vivre dans le dépôt.
+deploy_key
+deploy_key.pub
