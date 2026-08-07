@@ -1,0 +1,17 @@
+# Variables partagees par les trois services. Ce qui differe par service
+# (SERVICE, PORT, URL_INTERNE, API_URL) vit dans son propre Deployment, pas
+# ici : un ConfigMap unique avec des valeurs contradictoires par service
+# serait plus dur a lire qu'utile a partager.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: quiz-config
+  namespace: quiz
+data:
+  TABLEAU_URL: "https://services-battle.vercel.app"
+  GROUPE: "NavySeal"
+  COULEUR: "#FF0000"
+  DB_HOST: "quiz-db"
+  DB_PORT: "5432"
+  DB_NAME: "quizdb"
+  PAVILLON_FICHIER: "/data/pavillon.txt"

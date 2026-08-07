@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quiz-scores
+  namespace: quiz
+spec:
+  replicas: 1
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: quiz-scores
+  template:
+    metadata:
+      labels:
+        app: quiz-scores
+    spec:
+      containers:
+        - name: quiz-scores
+          image: gabrielmartin09/quiz-scores:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: SERVICE
+              value: "scores"
+            - name: URL_INTERNE
+              value: "http://localhost:8000"
+          envFrom:
+            - configMapRef:
+                name: quiz-config
+            - secretRef:
+                name: quiz-secret
+          volumeMounts:
+            - name: pavillon
+              mountPath: /data
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /sante
+              port: 8000
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 24Mi
+            limits:
+              cpu: 200m
+              memory: 32Mi
+      volumes:
+        - name: pavillon
+          persistentVolumeClaim:
+            claimName: quiz-pavillon
