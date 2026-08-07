@@ -7,6 +7,7 @@ const path = require('node:path');
 const express = require('express');
 const helmet = require('helmet');
 const client = require('prom-client');
+const { demarrerLePouls } = require('./pouls');
 
 const PORT = process.env.PORT || 3000;
 const API_URL = process.env.API_URL || 'http://api:4000';
@@ -146,6 +147,11 @@ app.get('/metrics', async (req, res) => {
 const serveur = app.listen(PORT, () => {
   console.log(`🚀 quiz-front sur le port ${PORT}, API sur ${API_URL}`);
 });
+
+// Pouls vers le tableau de la classe. Independant de l'API : le carre du
+// front doit rester plein quand l'API tombe, sinon la degradation gracieuse
+// ne se voit pas au tableau.
+demarrerLePouls();
 
 // Sans ce gestionnaire, un port deja pris fait sortir Node sur une trace
 // illisible, et "node --watch" n'affiche qu'un "Failed running server.js"

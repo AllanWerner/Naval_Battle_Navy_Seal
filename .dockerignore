@@ -45,9 +45,10 @@ dist/
 build/
 
 # Ce qui n'a rien a faire dans l'image de l'API.
-# front/ n'est PAS exclu : front/Dockerfile se construit depuis cette meme
-# racine (pour recuperer pouls.js), et Docker n'applique qu'un seul
-# .dockerignore par contexte. L'exclure casserait le build du front.
+# front/ et stats_api/ ont chacun leur propre contexte de build (voir la
+# matrice de .github/workflows/ci-cd.yml) : ce fichier ne s'applique qu'au
+# contexte racine, celui de l'API, et les exclure ici ne les prive de rien.
+front/
 docs/
 grafana/
 stats_api/

@@ -1,3 +1,11 @@
+// Copie conforme de src/pouls.js.
+//
+// Les deux images se construisent avec des contextes de build separes
+// (./front et la racine, cf. la matrice de .github/workflows/ci-cd.yml) : un
+// Dockerfile ne peut pas COPY hors de son contexte, donc le module ne peut
+// pas etre partage sans transformer le depot en monorepo a paquets. Toute
+// correction faite ici est a reporter dans src/pouls.js, et inversement.
+
 const fs = require('fs');
 const os = require('os');
 
@@ -14,6 +22,8 @@ let aDeclarer = 0;     // encaissés depuis le dernier pouls, ce que le tableau 
 
 // Le pavillon est relu du disque à chaque pouls : s'il vit dans un volume, il
 // traverse le redéploiement, sinon il disparaît du tableau devant toute la classe.
+// Ici le volume est monté en lecture seule : le front affiche le pavillon, c'est
+// l'API qui l'écrit.
 function lirePavillon() {
   try {
     return fs.readFileSync(PAVILLON, 'utf8').trim();
