@@ -34,7 +34,7 @@ services:
     # ${TAG:-latest} : le sha du commit pousse par la pipeline, ou latest
     # pour un lancement a la main. ${REGISTRY} centralise le compte du
     # registry : un seul endroit a changer si l'equipage en change.
-    image: ${REGISTRY:-allanwer}/quiz-api:${TAG:-latest}
+    image: ${REGISTRY:-gabrielmartin09}/quiz-api:${TAG:-latest}
     env_file:
       - .env
     environment:
@@ -61,7 +61,7 @@ services:
 
   scores:
     container_name: quiz-scores
-    image: ${REGISTRY:-allanwer}/quiz-scores:${TAG:-latest}
+    image: ${REGISTRY:-gabrielmartin09}/quiz-scores:${TAG:-latest}
     env_file:
       - .env
     environment:
@@ -77,7 +77,7 @@ services:
 
   front:
     container_name: quiz-front
-    image: ${REGISTRY:-allanwer}/quiz-front:${TAG:-latest}
+    image: ${REGISTRY:-gabrielmartin09}/quiz-front:${TAG:-latest}
     environment:
       PORT: 3000
       API_URL: http://api:4000

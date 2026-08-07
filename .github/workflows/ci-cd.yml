@@ -5,6 +5,9 @@ on:
     branches:
       - '**'
 
+env:
+  NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE || 'gabrielmartin09' }}
+
 jobs:
   test:
     name: Tests
@@ -53,13 +56,14 @@ jobs:
     strategy:
       matrix:
         include:
-          - image: allanwer/quiz-api
+          # Seul le nom court figure ici : le compte vient de NAMESPACE.
+          - name: quiz-api
             context: .
             dockerfile: ./Dockerfile
-          - image: allanwer/quiz-scores
+          - name: quiz-scores
             context: ./stats_api
             dockerfile: ./stats_api/Dockerfile
-          - image: allanwer/quiz-front
+          - name: quiz-front
             context: ./front
             dockerfile: ./front/Dockerfile
     steps:
@@ -74,15 +78,15 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build & push ${{ matrix.image }}
+      - name: Build & push ${{ env.NAMESPACE }}/${{ matrix.name }}
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
           push: ${{ contains(fromJSON('["refs/heads/master","refs/heads/develop"]'), github.ref) }}
           tags: |
-            ${{ matrix.image }}:${{ github.sha }}
-            ${{ matrix.image }}:latest
+            ${{ env.NAMESPACE }}/${{ matrix.name }}:${{ github.sha }}
+            ${{ env.NAMESPACE }}/${{ matrix.name }}:latest
 
   deploy:
     name: Deploy to production
@@ -122,9 +126,15 @@ jobs:
       - name: Remplacer la flotte
         shell: bash
         run: |
+          # On efface les deux lignes avant de les reecrire : plus court
+          # qu'un grep-ou-ajoute, et rejouable sans empiler les doublons.
+          # REGISTRY part avec TAG pour qu'un "docker compose up" lance a la
+          # main sur la cible retombe sur le meme compte que la pipeline.
           ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
             "cd /srv/flotte && \
-             grep -q '^TAG=' .env && sed -i \"s|^TAG=.*|TAG=$GITHUB_SHA|\" .env || echo 'TAG=$GITHUB_SHA' >> .env && \
+             touch .env && \
+             sed -i '/^TAG=/d;/^REGISTRY=/d' .env && \
+             printf 'TAG=%s\nREGISTRY=%s\n' '$GITHUB_SHA' '$NAMESPACE' >> .env && \
              docker compose -f docker-compose.prod.yml pull && \
              docker compose -f docker-compose.prod.yml up -d"
         env:
