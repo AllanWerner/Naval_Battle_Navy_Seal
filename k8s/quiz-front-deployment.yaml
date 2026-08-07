@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quiz-front
+  namespace: quiz
+spec:
+  replicas: 1
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: quiz-front
+  template:
+    metadata:
+      labels:
+        app: quiz-front
+    spec:
+      containers:
+        - name: quiz-front
+          image: gabrielmartin09/quiz-front:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: SERVICE
+              value: "front"
+            - name: PORT
+              value: "3000"
+            - name: URL_INTERNE
+              value: "http://localhost:3000"
+            - name: API_URL
+              value: "http://quiz-api:4000"
+          envFrom:
+            - configMapRef:
+                name: quiz-config
+          volumeMounts:
+            # Lecture seule : le front affiche le pavillon, seule l'API
+            # l'ecrit (meme regle que docker-compose.prod.yml).
+            - name: pavillon
+              mountPath: /data
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /sante
+              port: 3000
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            # Liveness locale : le front reste vivant meme si l'API tombe,
+            # il sait degrader proprement (voir /sante qui, elle, le sait).
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 24Mi
+            limits:
+              cpu: 200m
+              memory: 32Mi
+      volumes:
+        - name: pavillon
+          persistentVolumeClaim:
+            claimName: quiz-pavillon

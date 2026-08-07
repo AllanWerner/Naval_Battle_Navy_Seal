@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: quiz-front
+  namespace: quiz
+spec:
+  type: ClusterIP
+  selector:
+    app: quiz-front
+  ports:
+    - port: 3000
+      targetPort: 3000
