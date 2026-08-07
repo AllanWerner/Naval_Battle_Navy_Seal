@@ -6,7 +6,7 @@ const helmet = require('helmet');
 const quizRoutes = require('./routes/quiz');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const db = require('./models');
-const { register, metricsMiddleware } = require('./metrics');
+const { register, metricsMiddleware, baseJoignable } = require('./metrics');
 const { demarrerLePouls } = require('./pouls');
 
 const app = express();
@@ -46,8 +46,10 @@ app.get('/ready', (req, res) => {
 app.get('/sante', async (req, res) => {
   try {
     await db.sequelize.query('SELECT 1');
+    baseJoignable.set(1);
     res.json({ status: 'ok', base: 'joignable' });
   } catch (error) {
+    baseJoignable.set(0);
     res.status(503).json({ status: 'degrade', base: 'injoignable', detail: error.message });
   }
 });
@@ -57,6 +59,7 @@ app.get('/sante', async (req, res) => {
 app.get('/travail', async (req, res) => {
   try {
     const question = await db.Question.findOne({ where: { active: true } });
+    baseJoignable.set(1);
     if (!question) {
       return res.status(503).json({ success: false, message: 'aucune manche en cours' });
     }
@@ -65,6 +68,7 @@ app.get('/travail', async (req, res) => {
   } catch (error) {
     // 503 et pas 500 : le travail n'a pas pu être fait, le service n'est pas
     // cassé pour autant, et l'appelant peut réessayer.
+    baseJoignable.set(0);
     res.status(503).json({ success: false, message: error.message });
   }
 });

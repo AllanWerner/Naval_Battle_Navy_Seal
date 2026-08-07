@@ -44,6 +44,16 @@ const apiJoignable = new client.Gauge({
   registers: [register]
 });
 
+const serviceVersionInfo = new client.Gauge({
+  name: 'service_version_info',
+  help: 'Version applicative exposee par le service',
+  labelNames: ['service', 'version'],
+  registers: [register]
+});
+
+apiJoignable.set(0);
+serviceVersionInfo.labels(process.env.SERVICE || 'front', process.env.VERSION || process.env.TAG || 'dev').set(1);
+
 app.use((req, res, next) => {
   const finTimer = httpRequestDuration.startTimer();
   res.on('finish', () => {
@@ -67,7 +77,7 @@ async function appelerApi(chemin, options = {}) {
   const minuteur = setTimeout(() => controleur.abort(), 2000);
   try {
     const reponse = await fetch(`${API_URL}${chemin}`, { ...options, signal: controleur.signal });
-    apiJoignable.set(1);
+    apiJoignable.set(reponse.ok ? 1 : 0);
     return { ok: reponse.ok, status: reponse.status, corps: await reponse.json() };
   } catch (erreur) {
     apiJoignable.set(0);
