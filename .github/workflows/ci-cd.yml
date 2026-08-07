@@ -5,10 +5,6 @@ on:
     branches:
       - '**'
 
-env:
-  DOCKERHUB_API_IMAGE: allanwer/task_api-api
-  DOCKERHUB_STATS_IMAGE: allanwer/task_api-stats-api
-
 jobs:
   test:
     name: Tests
@@ -54,6 +50,18 @@ jobs:
     name: Build & push images
     needs: [test]
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - image: allanwer/quiz-api
+            context: .
+            dockerfile: ./Dockerfile
+          - image: allanwer/quiz-scores
+            context: ./stats_api
+            dockerfile: ./stats_api/Dockerfile
+          - image: allanwer/quiz-front
+            context: ./front
+            dockerfile: ./front/Dockerfile
     steps:
       - uses: actions/checkout@v4
 
@@ -66,25 +74,15 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build & push task-api image
+      - name: Build & push ${{ matrix.image }}
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: ./Dockerfile
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
           push: ${{ github.ref == 'refs/heads/master' }}
           tags: |
-            ${{ env.DOCKERHUB_API_IMAGE }}:${{ github.sha }}
-            ${{ env.DOCKERHUB_API_IMAGE }}:latest
-
-      - name: Build & push stats-api image
-        uses: docker/build-push-action@v6
-        with:
-          context: ./stats_api
-          file: ./stats_api/Dockerfile
-          push: ${{ github.ref == 'refs/heads/master' }}
-          tags: |
-            ${{ env.DOCKERHUB_STATS_IMAGE }}:${{ github.sha }}
-            ${{ env.DOCKERHUB_STATS_IMAGE }}:latest
+            ${{ matrix.image }}:${{ github.sha }}
+            ${{ matrix.image }}:latest
 
   deploy:
     name: Deploy to production
@@ -109,40 +107,47 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
 
-      - name: Ship the compose stack and monitoring config
+      - name: Envoyer la description de la flotte
         shell: bash
         run: |
-          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p /srv/todo"
-          scp -P "$DEPLOY_PORT" docker-compose.prod.yml "$DEPLOY_USER@$DEPLOY_HOST:/srv/todo/docker-compose.prod.yml"
-          scp -P "$DEPLOY_PORT" prometheus.yml "$DEPLOY_USER@$DEPLOY_HOST:/srv/todo/prometheus.yml"
-          scp -P "$DEPLOY_PORT" -r grafana "$DEPLOY_USER@$DEPLOY_HOST:/srv/todo/grafana"
+          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p /srv/flotte"
+          scp -P "$DEPLOY_PORT" docker-compose.prod.yml "$DEPLOY_USER@$DEPLOY_HOST:/srv/flotte/docker-compose.prod.yml"
+          scp -P "$DEPLOY_PORT" prometheus.yml "$DEPLOY_USER@$DEPLOY_HOST:/srv/flotte/prometheus.yml"
+          scp -P "$DEPLOY_PORT" -r grafana "$DEPLOY_USER@$DEPLOY_HOST:/srv/flotte/grafana"
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
 
-      - name: Deploy with docker compose
+      - name: Remplacer la flotte
         shell: bash
         run: |
           ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
-            "cd /srv/todo && TAG=$GITHUB_SHA docker compose -f docker-compose.prod.yml up -d"
+            "cd /srv/flotte && \
+             grep -q '^TAG=' .env && sed -i \"s|^TAG=.*|TAG=$GITHUB_SHA|\" .env || echo 'TAG=$GITHUB_SHA' >> .env && \
+             docker compose -f docker-compose.prod.yml pull && \
+             docker compose -f docker-compose.prod.yml up -d"
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
 
-      - name: Verify /health
+      - name: Vérifier que la flotte est debout
         shell: bash
         run: |
-          for i in $(seq 1 15); do
-            if ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "curl -sf http://localhost:4000/health"; then
-              echo "API en ligne."
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "L'API ne répond pas sur /health après déploiement." >&2
-          exit 1
+          check() {
+            local port="$1"
+            for i in $(seq 1 15); do
+              if ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "curl -sf http://localhost:$port/health"; then
+                echo "Service sur le port $port en ligne."
+                return 0
+              fi
+              sleep 2
+            done
+            echo "Aucune réponse sur le port $port après déploiement." >&2
+            return 1
+          }
+          check 3000 && check 4000 && check 8000
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
