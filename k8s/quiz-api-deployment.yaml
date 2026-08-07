@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quiz-api
+  namespace: quiz
+spec:
+  replicas: 3
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: quiz-api
+  template:
+    metadata:
+      labels:
+        app: quiz-api
+    spec:
+      containers:
+        - name: quiz-api
+          # Tag ecrase a chaque deploiement par le job CI (kubectl set
+          # image) avec le sha du commit. Valeur ici = dernier sha connu bon.
+          image: gabrielmartin09/quiz-api:latest
+          ports:
+            - containerPort: 4000
+          env:
+            - name: SERVICE
+              value: "api"
+            - name: PORT
+              value: "4000"
+            - name: URL_INTERNE
+              value: "http://localhost:4000"
+            - name: NODE_ENV
+              value: "production"
+          envFrom:
+            - configMapRef:
+                name: quiz-config
+            - secretRef:
+                name: quiz-secret
+          volumeMounts:
+            - name: pavillon
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /sante
+              port: 4000
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 4000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 24Mi
+            limits:
+              cpu: 200m
+              memory: 32Mi
+      volumes:
+        # PVC portee par Mouhamed (etat/stockage) : "quiz-pavillon", montee
+        # ici en ecriture puisque c'est l'API qui hisse le pavillon.
+        - name: pavillon
+          persistentVolumeClaim:
+            claimName: quiz-pavillon
