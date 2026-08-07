@@ -1,7 +1,13 @@
+// Charge le .env local. C'est le premier module a lire process.env : le
+// faire dans app.js serait trop tard, les tests requierent les modeles
+// avant lui. dotenv n'ecrase jamais une variable deja definie, donc en
+// conteneur et en CI ce sont bien les vraies variables qui gagnent.
+require('dotenv').config();
+
 const { Sequelize } = require('sequelize');
 
 const sequelize = new Sequelize(
-  process.env.DB_NAME || 'taskdb',
+  process.env.DB_NAME || 'quizdb',
   process.env.DB_USER || 'postgres',
   process.env.DB_PASSWORD || 'postgres',
   {
