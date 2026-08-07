@@ -1,0 +1,14 @@
+# Les données de la base vivent ici, pas dans le pod : un pod Postgres est
+# jetable et remplacé à chaque incident ou mise à jour, ses données non.
+# C'est l'équivalent cluster du volume "quizdata" du compose.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: quiz-db-data
+  namespace: quiz
+spec:
+  accessModes:
+    - ReadWriteOnce          # un seul node écrit : la base n'a qu'un pod
+  resources:
+    requests:
+      storage: 1Gi

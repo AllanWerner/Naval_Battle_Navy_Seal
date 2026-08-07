@@ -1,0 +1,22 @@
+# La PVC du pavillon : le volume Docker "pavillon" du compose devient une
+# demande de stockage que le cluster satisfait (StorageClass local-path de
+# k3d, provisionnée au premier pod qui la monte).
+#
+# LA question piège du palier : qui la monte ? Même contrat que le compose —
+# seul quiz-api écrit (il hisse le pavillon), front et scores la montent en
+# readOnly: true (ils l'affichent). ReadWriteOnce n'interdit rien ici : c'est
+# une contrainte par NODE, pas par pod, et le cluster est mono-node — les
+# trois services partagent donc le même fichier sans conflit. Deux exemplaires
+# qui écrivent dans le même fichier, ça marche pour un pavillon relu à chaque
+# pouls ; ça ne marcherait pas pour n'importe quelle donnée.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: quiz-pavillon        # le claimName exact référencé par les 3 Deployments
+  namespace: quiz
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Mi         # un fichier de 140 caractères : large
