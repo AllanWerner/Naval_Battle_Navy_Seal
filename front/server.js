@@ -121,9 +121,9 @@ app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date() 
 // La sonde qui dit la verite : elle nomme l'etat de la dependance sans
 // pretendre que le front est mort pour autant.
 app.get('/sante', async (req, res) => {
-  const r = await appelerApi('/health');
+  const r = await appelerApi('/sante');
   if (r.ok) return res.json({ status: 'ok', api: 'joignable' });
-  res.status(503).json({ status: 'degrade', api: 'injoignable' });
+  res.json({ status: 'degrade', api: 'injoignable' });
 });
 
 // La route qui encaisse les coups. Travail local et reel : relecture de la
