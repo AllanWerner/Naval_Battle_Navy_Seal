@@ -3,7 +3,8 @@ name: CI/CD
 on:
   push:
     branches:
-      - '**'
+      - master
+      - develop
 
 env:
   NAMESPACE: ${{ secrets.DOCKERHUB_USERNAME || 'gabrielmartin09' }}
