@@ -152,7 +152,7 @@ jobs:
       - name: Vérifier que la flotte est debout
         shell: bash
         run: |
-          check() {
+          check_port() {
             local port="$1"
             for i in $(seq 1 15); do
               if ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "wget -qO- http://localhost:$port/health"; then
@@ -164,7 +164,23 @@ jobs:
             echo "Aucune réponse sur le port $port après déploiement." >&2
             return 1
           }
-          check 3000 && check 4000 && check 8000
+          # "api" n'a pas de port hôte fixe (--scale le rendrait impossible) :
+          # on vérifie chaque exemplaire par son healthcheck Docker, pas HTTP.
+          check_service_healthy() {
+            local service="$1"
+            for i in $(seq 1 15); do
+              statuses=$(ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
+                "cd /srv/flotte && docker compose -f docker-compose.prod.yml ps --format '{{.Health}}' $service")
+              if [ -n "$statuses" ] && ! echo "$statuses" | grep -qv "^healthy$"; then
+                echo "$service : tous les exemplaires healthy."
+                return 0
+              fi
+              sleep 2
+            done
+            echo "$service n'est pas healthy après déploiement." >&2
+            return 1
+          }
+          check_port 3000 && check_port 8000 && check_service_healthy api
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
