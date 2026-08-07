@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quiz : commande animateur</title>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: flex; justify-content: center;
+      font: 16px/1.5 system-ui, sans-serif; background: #f4f6fa; color: #1b2233;
+      padding: 24px;
+    }
+    main { width: 100%; max-width: 560px; }
+    h1 { font-size: .95rem; letter-spacing: .08em; text-transform: uppercase; color: #6b7488; }
+    .manche { font-size: .85rem; color: #6b7488; }
+    #question { font-size: 1.35rem; margin: 4px 0 20px; }
+    ol { padding-left: 1.2rem; margin: 0 0 24px; color: #3b4457; }
+    ol li { margin-bottom: 4px; }
+    button {
+      width: 100%; padding: 16px; font: inherit; font-weight: 600; cursor: pointer;
+      border-radius: 10px; border: 1px solid #2f6fed; background: #2f6fed; color: #fff;
+    }
+    button:hover:not(:disabled) { background: #2560d8; }
+    button:disabled { opacity: .55; cursor: default; }
+    #etat { min-height: 1.5em; margin-top: 14px; color: #6b7488; }
+    /* Navigation entre les deux vues. Meme markup dans les deux pages :
+       pas de moteur de template ici, deux fichiers statiques suffisent. */
+    .onglets {
+      display: flex; gap: 4px; margin-bottom: 22px;
+      border-bottom: 1px solid #e2e7f0;
+    }
+    .onglets a {
+      padding: 8px 14px; text-decoration: none; font-size: .9rem;
+      color: #6b7488; border-bottom: 2px solid transparent;
+    }
+    .onglets a:hover { color: #1b2233; }
+    .onglets a.actif { color: #2f6fed; border-bottom-color: #2f6fed; font-weight: 600; }
+    #panne { display: none; padding: 14px 16px; border-radius: 10px;
+      background: #fdeaea; border: 1px solid #f2b8b8; color: #8f1f1f; }
+    .note { margin-top: 28px; font-size: .85rem; color: #8a92a6; }
+  </style>
+</head>
+<body>
+  <main>
+    <nav class="onglets">
+      <a href="/">Jouer</a>
+      <a href="/animateur" class="actif">Animateur</a>
+    </nav>
+
+    <h1>Commande animateur</h1>
+
+    <div id="panne">L’API ne répond pas : impossible de piloter les manches.</div>
+
+    <div id="pilotage">
+      <p class="manche" id="manche"></p>
+      <p id="question">Chargement…</p>
+      <ol id="choix"></ol>
+      <button id="suivante">Question suivante</button>
+      <p id="etat"></p>
+    </div>
+
+    <p class="note">
+      La bonne réponse n’est pas affichée ici non plus : l’API ne la livre à
+      personne tant que la manche est ouverte. Cette page n’est pas protégée,
+      n’importe qui peut ouvrir l’onglet et changer de manche.
+    </p>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    function afficherPanne(actif) {
+      $('panne').style.display = actif ? 'block' : 'none';
+      $('pilotage').style.display = actif ? 'none' : 'block';
+    }
+
+    async function rafraichir() {
+      try {
+        const reponse = await fetch('/api/question');
+        if (!reponse.ok) return afficherPanne(true);
+
+        const { data } = await reponse.json();
+        afficherPanne(false);
+        $('manche').textContent = `Manche n° ${data.ordre}`;
+        $('question').textContent = data.texte;
+        $('choix').innerHTML = '';
+        data.choix.forEach((libelle) => {
+          const item = document.createElement('li');
+          item.textContent = libelle;
+          $('choix').appendChild(item);
+        });
+      } catch {
+        afficherPanne(true);
+      }
+    }
+
+    $('suivante').onclick = async () => {
+      $('suivante').disabled = true;
+      $('etat').textContent = 'Changement de manche…';
+      try {
+        const reponse = await fetch('/api/manche/suivante', { method: 'POST' });
+        const corps = await reponse.json();
+        $('etat').textContent = reponse.ok
+          ? `Manche ${corps.data.ordre} ouverte.`
+          : corps.message || 'Changement refusé.';
+        await rafraichir();
+      } catch {
+        $('etat').textContent = 'API injoignable.';
+      }
+      $('suivante').disabled = false;
+    };
+
+    rafraichir();
+    setInterval(rafraichir, 3000);
+  </script>
+</body>
+</html>
