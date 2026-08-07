@@ -6,7 +6,7 @@ on:
       - '**'
 
 env:
-  NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE || 'gabrielmartin09' }}
+  NAMESPACE: ${{ secrets.DOCKERHUB_USERNAME || 'gabrielmartin09' }}
 
 jobs:
   test:
@@ -17,12 +17,12 @@ jobs:
         image: postgres:16-alpine
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: taskdb
+          POSTGRES_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}
+          POSTGRES_DB: quizdb
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U postgres -d taskdb"
+          --health-cmd "pg_isready -U postgres -d quizdb"
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
@@ -44,9 +44,9 @@ jobs:
           NODE_ENV: test
           DB_HOST: localhost
           DB_PORT: 5432
-          DB_NAME: taskdb
+          DB_NAME: quizdb
           DB_USER: postgres
-          DB_PASSWORD: postgres
+          DB_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}
           DB_SSL: false
 
   build:
