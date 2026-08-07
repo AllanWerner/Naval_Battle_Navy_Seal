@@ -57,10 +57,10 @@ spec:
           resources:
             requests:
               cpu: 10m
-              memory: 24Mi
+              memory: 48Mi
             limits:
               cpu: 200m
-              memory: 32Mi
+              memory: 96Mi
       volumes:
         - name: pavillon
           persistentVolumeClaim:
