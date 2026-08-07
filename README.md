@@ -16,11 +16,11 @@ La chaîne de livraison vient du fil rouge de la semaine (Docker, pipeline, mach
 
 | Rôle | Qui |
 |---|---|
-| Images et composes | *à compléter* |
-| Livraison (pipeline, machine cible) | *à compléter* |
-| État (base, volumes, pavillon) | *à compléter* |
-| Mesure (Prometheus, Grafana) | *à compléter* |
-| Astreinte (tableau, journal, runbook) | *à compléter* |
+| Images et composes | Yoann |
+| Livraison (pipeline, machine cible) | Gabriel |
+| État (base, volumes, pavillon) | Mouhammed  |
+| Mesure (Prometheus, Grafana) | Joel |
+| Astreinte (tableau, journal, runbook) | Allan |
 
 ## Ce que fait le projet
 
