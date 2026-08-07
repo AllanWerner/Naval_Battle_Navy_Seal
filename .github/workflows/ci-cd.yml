@@ -155,7 +155,7 @@ jobs:
           check() {
             local port="$1"
             for i in $(seq 1 15); do
-              if ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "curl -sf http://localhost:$port/health"; then
+              if ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "wget -qO- http://localhost:$port/health"; then
                 echo "Service sur le port $port en ligne."
                 return 0
               fi
