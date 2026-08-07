@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quiz-db
+  namespace: quiz
+spec:
+  replicas: 1                # une base ne se duplique pas comme un service sans état
+  selector:
+    matchLabels:
+      app: quiz-db
+  template:
+    metadata:
+      labels:
+        app: quiz-db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16.4-alpine   # la même version épinglée que le compose
+          env:
+            # Identifiants depuis le Secret (les vraies valeurs ne vivent que
+            # dans le cluster), nom de base depuis le ConfigMap : une seule
+            # source de vérité, la même que celle des trois services.
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: quiz-secret
+                  key: DB_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: quiz-secret
+                  key: DB_PASSWORD
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: quiz-config
+                  key: DB_NAME
+          ports:
+            - containerPort: 5432
+          # "Postgres accepte des connexions", pas "le conteneur a démarré" —
+          # le même pg_isready que le healthcheck du compose.
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+              # subPath évite le dossier "lost+found" que certains volumes
+              # déposent à la racine, et que Postgres refuse au démarrage.
+              subPath: pgdata
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: quiz-db-data
