@@ -30,7 +30,9 @@ services:
     # autres conteneurs, jamais depuis la machine hote.
 
   api:
-    container_name: quiz-api
+    # Pas de "container_name" : un nom fixe interdit "--scale api=N" (Docker
+    # exige un nom unique par conteneur, donc pas de nom manuel sur un
+    # service qu'on scale).
     # ${TAG:-latest} : le sha du commit pousse par la pipeline, ou latest
     # pour un lancement a la main. ${REGISTRY} centralise le compte du
     # registry : un seul endroit a changer si l'equipage en change.
@@ -48,11 +50,10 @@ services:
       # Le pavillon survit au redeploiement parce qu'il vit ici, et pas
       # dans le systeme de fichiers du conteneur.
       - pavillon:/data
-    ports:
-      # Publie a l'interieur de la machine cible seulement : vm-prod ne
-      # renvoie vers l'exterieur que 2222, 3000, 9090 et 3001. C'est ce qui
-      # permet au job de deploiement de verifier /health en SSH.
-      - "4000:4000"
+    # Pas de "ports" ici : un port hote fixe empeche "--scale api=N" (deux
+    # conteneurs ne peuvent pas ecouter le meme port sur l'hote). Le front
+    # et la pipeline de verification atteignent l'API via le reseau interne
+    # (http://api:4000), jamais depuis l'exterieur de vm-prod.
     depends_on:
       postgres:
         condition: service_healthy
