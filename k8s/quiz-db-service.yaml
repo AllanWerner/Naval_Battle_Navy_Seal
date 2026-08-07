@@ -1,0 +1,13 @@
+# Le nom DNS stable de la base : "quiz-db", exactement la valeur DB_HOST du
+# ConfigMap. Les pods Postgres vont et viennent, ce nom ne bouge jamais.
+apiVersion: v1
+kind: Service
+metadata:
+  name: quiz-db
+  namespace: quiz
+spec:
+  selector:
+    app: quiz-db
+  ports:
+    - port: 5432
+      targetPort: 5432
