@@ -56,10 +56,10 @@ spec:
           resources:
             requests:
               cpu: 10m
-              memory: 24Mi
+              memory: 48Mi
             limits:
               cpu: 200m
-              memory: 32Mi
+              memory: 96Mi
       volumes:
         # PVC portee par Mouhamed (etat/stockage) : "quiz-pavillon", montee
         # ici en ecriture puisque c'est l'API qui hisse le pavillon.
