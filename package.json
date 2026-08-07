@@ -1,9 +1,13 @@
 {
-  "name": "task_api",
+  "name": "quiz-api",
   "version": "1.0.0",
-  "description": "Containeurized Api",
-  "main": "app.js",
+  "description": "API metier du quiz en direct : questions, reponses, decompte",
+  "main": "src/app.js",
   "scripts": {
+    "start": "node src/app.js",
+    "dev": "node --watch src/app.js",
+    "db:dev": "docker run -d --name quiz-db-dev -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=quizdb -p 5433:5432 postgres:16.4-alpine",
+    "db:stop": "docker rm -f quiz-db-dev",
     "test": "jest --runInBand"
   },
   "author": "",

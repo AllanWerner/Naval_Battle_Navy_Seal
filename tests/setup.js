@@ -7,10 +7,10 @@ beforeAll(async () => {
   await db.connectWithRetry();
 });
 
-// Chaque test repart d'un état de base connu, qu'il tourne seul ou
-// après d'autres tests (voir "points de vigilance" de la Phase 6).
+// Chaque test repart d'un état de base connu. Les réponses partent, les
+// questions du seed restent : elles sont la donnée de référence du quiz.
 afterEach(async () => {
-  await db.Task.destroy({ truncate: true, force: true });
+  await db.Reponse.destroy({ truncate: true, force: true });
 });
 
 afterAll(async () => {

@@ -43,3 +43,14 @@ jest.config.js
 # Build
 dist/
 build/
+
+# Ce qui n'a rien a faire dans l'image de l'API.
+# front/ n'est PAS exclu : front/Dockerfile se construit depuis cette meme
+# racine (pour recuperer pouls.js), et Docker n'applique qu'un seul
+# .dockerignore par contexte. L'exclure casserait le build du front.
+docs/
+grafana/
+stats_api/
+tests/
+script_mesure.sh
+prometheus.yml

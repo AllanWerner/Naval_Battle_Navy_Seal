@@ -30,6 +30,13 @@ COPY --from=starter --chown=nodejs:nodejs /app/node_modules ./node_modules
 # Copie du code source (sans .git, node_modules, etc. grâce au .dockerignore)
 COPY --chown=nodejs:nodejs . .
 
+# Le dossier du pavillon est cree ET donne a l'utilisateur non-root AVANT
+# le montage du volume. Docker initialise un volume nomme avec le contenu et
+# les droits du dossier de l'image : sans cette ligne, /data appartient a
+# root, et l'API en non-root ne peut pas y ecrire (EACCES a la premiere
+# tentative de hisser le pavillon, en public).
+RUN mkdir -p /data && chown nodejs:nodejs /data
+
 #Documentation du Port d'écoute de l'app(Le port n'est réelement ouvert que si on le mappe lors du lancement du conteneur)
 EXPOSE 4000
 

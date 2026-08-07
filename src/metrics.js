@@ -18,17 +18,18 @@ const httpRequestDuration = new client.Histogram({
   registers: [register]
 });
 
-// Mesure metier : nombre de taches creees depuis le demarrage (incremente
-// par taskController.createTask, uniquement en cas de succes).
-const tasksCreatedTotal = new client.Counter({
-  name: 'tasks_created_total',
-  help: 'Nombre de taches creees depuis le demarrage',
+// Mesure metier : nombre de reponses envoyees depuis le demarrage, ventile
+// par justesse. Deux series au total, la cardinalite reste bornee.
+const reponsesTotal = new client.Counter({
+  name: 'quiz_reponses_total',
+  help: 'Nombre de reponses enregistrees depuis le demarrage',
+  labelNames: ['correcte'],
   registers: [register]
 });
 
-// L'identifiant d'une tache ne doit jamais devenir un label (cardinalite
+// L'identifiant d'une question ne doit jamais devenir un label (cardinalite
 // non bornee). On utilise le pattern de route matché par Express
-// (ex. "/api/tasks/:id"), pas l'URL brute. Pour les 404 "route inconnue"
+// (ex. "/api/score/:pseudo"), pas l'URL brute. Pour les 404 "route inconnue"
 // (aucune Route Express ne matche), req.route reste undefined : on les
 // regroupe sous un label fixe "unmatched" plutôt que l'URL demandée,
 // sinon un client qui martèle des routes aléatoires ferait exploser le
@@ -62,5 +63,5 @@ function metricsMiddleware(req, res, next) {
 module.exports = {
   register,
   metricsMiddleware,
-  tasksCreatedTotal
+  reponsesTotal
 };
