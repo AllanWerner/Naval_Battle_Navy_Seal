@@ -1,58 +1,101 @@
+# La flotte du quiz, en local. Quatre conteneurs : trois services qui
+# tiendront un carre au tableau, plus la base qui n'en tient pas.
+#
+#   docker compose up -d --build
+#
+# Le compose de production (docker-compose.prod.yml) tire les images du
+# registry au lieu de les construire : c'est la seule difference de fond.
 
 services:
-  api:
-    build: .
-    # ${PORT:-4000} : valeur par défaut si PORT n'est pas défini dans .env
-    ports:
-      - "${PORT:-4000}:${PORT:-4000}"
-    env_file:
-      - .env
-    depends_on:
-      postgres:
-        # Attend que Postgres soit vraiment prêt à accepter des connexions,
-        # pas seulement que le conteneur ait démarré (voir healthcheck plus bas).
-        condition: service_healthy
-    networks:
-      - tasknetwork
-    restart: unless-stopped
-
   postgres:
+    container_name: quiz-db
     image: postgres:16.4-alpine
-    env_file:
-      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
-      - taskvolume:/var/lib/postgresql/data
+      - quizdata:/var/lib/postgresql/data
     healthcheck:
+      # Ce n'est pas "le conteneur a demarre" mais "Postgres accepte des
+      # connexions" : c'est ce que depends_on attend plus bas.
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 3s
       retries: 5
-    networks:
-      - tasknetwork
+    networks: [quiznet]
     restart: unless-stopped
-    # Volontairement AUCUN "ports:" ici : Postgres ne doit être joignable
-    # que par les autres conteneurs du network, jamais depuis la machine hôte
+    # Aucun "ports" volontairement : la base n'est joignable que par les
+    # autres conteneurs du reseau, jamais depuis la machine hote.
 
-  stats-api:
-    build: ./stats_api
-    networks:
-      - tasknetwork  
+  api:
+    container_name: quiz-api
+    build: .
     environment:
-      DB_HOST: ${DB_HOST}
-      DB_PORT: ${DB_PORT}
-      DB_NAME: ${DB_NAME}
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
+      NODE_ENV: production
+      PORT: 4000
+      # Ecrase ce que .env contient : dans le reseau Compose, la base
+      # s'appelle "postgres" et ecoute sur 5432. Le .env, lui, garde les
+      # valeurs du developpement hors conteneur (localhost:5433).
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_SSL: "false"
+      PAVILLON_FICHIER: /data/pavillon.txt
+    volumes:
+      # Le pavillon vit dans un volume, pas dans le conteneur : c'est ce qui
+      # le fait survivre au prochain deploiement (phase 5).
+      - pavillon:/data
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [quiznet]
+    restart: unless-stopped
+
+  scores:
+    container_name: quiz-scores
+    build: ./stats_api
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [quiznet]
+    restart: unless-stopped
 
+  front:
+    container_name: quiz-front
+    build: ./front
+    environment:
+      PORT: 3000
+      # Le nom du service, resolu par le DNS interne de Compose.
+      API_URL: http://api:4000
+    ports:
+      - "3000:3000"
+    depends_on:
+      # Volontairement pas "service_healthy" : le front doit savoir demarrer
+      # sans son API et afficher sa page degradee. L'attendre ici masquerait
+      # justement ce qu'on veut pouvoir montrer.
+      - api
+    networks: [quiznet]
+    restart: unless-stopped
 
 networks:
-  # Network custom nommé : active la résolution DNS par nom de service
-  # (api -> postgres), contrairement au bridge par défaut de Docker.
-  tasknetwork:
-    name: tasknetwork
-    external: true
+  # Reseau gere par Compose, pas "external" : la stack monte en une commande,
+  # sans docker network create prealable.
+  quiznet:
+    name: quiznet
 
 volumes:
-  taskvolume:
+  quizdata:
+  pavillon:

@@ -1,56 +1,95 @@
+# La flotte telle qu'elle tourne sur la machine cible.
+#
+# Difference de fond avec docker-compose.yml : ici on ne construit rien, on
+# tire des images deja publiees. La pipeline envoie ce fichier dans
+# /srv/flotte, y ecrit un .env contenant TAG=<sha du commit>, puis lance
+# docker compose pull && docker compose up -d.
+#
+# Retour arriere : le meme fichier, un autre TAG.
+#
+# A envoyer sur la cible en meme temps que ce fichier : prometheus.yml et
+# le dossier grafana/, montes plus bas.
 
 services:
-  api:
-    container_name: todo-api
-    # ${TAG:-latest} : le sha du commit poussé par la pipeline (voir job
-    # deploy), ou "latest" par défaut pour un lancement manuel. C'est ce
-    # qui permet un retour arrière : redéployer avec TAG=<sha précédent>.
-    image: allanwer/task_api-api:${TAG:-latest}
-    # ${PORT:-4000} : valeur par défaut si PORT n'est pas défini dans .env
-    ports:
-      - "${PORT:-4000}:${PORT:-4000}"
-    env_file:
-      - .env
-    depends_on:
-      postgres:
-        # Attend que Postgres soit vraiment prêt à accepter des connexions,
-        # pas seulement que le conteneur ait démarré (voir healthcheck plus bas).
-        condition: service_healthy
-    networks:
-      - tasknetwork
-    restart: unless-stopped
-
   postgres:
-    container_name: todo-db
+    container_name: quiz-db
     image: postgres:16.4-alpine
     env_file:
       - .env
     volumes:
-      - taskvolume:/var/lib/postgresql/data
+      - quizdata:/var/lib/postgresql/data
     healthcheck:
+      # "Postgres accepte des connexions", pas "le conteneur a demarre".
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 3s
       retries: 5
-    networks:
-      - tasknetwork
+    networks: [quiznet]
     restart: unless-stopped
-    # Volontairement AUCUN "ports:" ici : Postgres ne doit être joignable
-    # que par les autres conteneurs du network, jamais depuis la machine hôte
+    # Volontairement AUCUN "ports" : la base n'est joignable que par les
+    # autres conteneurs, jamais depuis la machine hote.
 
-  stats-api:
-    container_name: todo-stats-api
-    image: allanwer/task_api-stats-api:${TAG:-latest}
-    networks:
-      - tasknetwork  
+  api:
+    container_name: quiz-api
+    # ${TAG:-latest} : le sha du commit pousse par la pipeline, ou latest
+    # pour un lancement a la main. ${REGISTRY} centralise le compte du
+    # registry : un seul endroit a changer si l'equipage en change.
+    image: ${REGISTRY:-allanwer}/quiz-api:${TAG:-latest}
+    env_file:
+      - .env
     environment:
-      DB_HOST: ${DB_HOST}
-      DB_PORT: ${DB_PORT}
-      DB_NAME: ${DB_NAME}
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
+      # Ecrase ce que .env pourrait contenir : dans le reseau, la base
+      # s'appelle "postgres" et ecoute sur 5432. Sans ces deux lignes, un
+      # .env recopie depuis un poste de dev pointerait sur localhost.
+      DB_HOST: postgres
+      DB_PORT: 5432
+      PAVILLON_FICHIER: /data/pavillon.txt
+    volumes:
+      # Le pavillon survit au redeploiement parce qu'il vit ici, et pas
+      # dans le systeme de fichiers du conteneur.
+      - pavillon:/data
+    ports:
+      # Publie a l'interieur de la machine cible seulement : vm-prod ne
+      # renvoie vers l'exterieur que 2222, 3000, 9090 et 3001. C'est ce qui
+      # permet au job de deploiement de verifier /health en SSH.
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [quiznet]
+    restart: unless-stopped
+
+  scores:
+    container_name: quiz-scores
+    image: ${REGISTRY:-allanwer}/quiz-scores:${TAG:-latest}
+    env_file:
+      - .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
     ports:
       - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [quiznet]
+    restart: unless-stopped
+
+  front:
+    container_name: quiz-front
+    image: ${REGISTRY:-allanwer}/quiz-front:${TAG:-latest}
+    environment:
+      PORT: 3000
+      API_URL: http://api:4000
+    ports:
+      # Le seul port que la classe atteint reellement.
+      - "3000:3000"
+    depends_on:
+      # Pas "service_healthy" : le front doit demarrer sans son API et
+      # afficher sa page degradee. L'attendre masquerait ce comportement.
+      - api
+    networks: [quiznet]
+    restart: unless-stopped
 
   prometheus:
     container_name: prometheus
@@ -58,10 +97,9 @@ services:
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
-    networks:
-      - tasknetwork
     ports:
       - "9090:9090"
+    networks: [quiznet]
     restart: unless-stopped
 
   grafana:
@@ -71,25 +109,24 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
-    networks:
-      - tasknetwork
     ports:
-      # Port hôte 3001 (3000 documenté dans le sujet) : libre ici, l'API
-      # de ce projet écoute déjà sur 4000.
+      # 3001 sur l'hote : 3000 est pris par le front.
       - "3001:3000"
     depends_on:
       - prometheus
+    networks: [quiznet]
     restart: unless-stopped
 
-
 networks:
-  # Network custom nommé : active la résolution DNS par nom de service
-  # (api -> postgres), contrairement au bridge par défaut de Docker.
-  tasknetwork:
-    name: tasknetwork
-    external: true
+  # Reseau gere par Compose, pas "external" : la pipeline n'envoie que ce
+  # fichier et lance up -d. Un reseau externe imposerait un
+  # docker network create prealable a la main sur la machine cible, donc une
+  # etape que personne ne rejouera le jour ou la flotte remonte ailleurs.
+  quiznet:
+    name: quiznet
 
 volumes:
-  taskvolume:
+  quizdata:
+  pavillon:
   prometheus-data:
   grafana-data:
