@@ -48,7 +48,7 @@ async function envoyerPouls() {
   let attente = 5000;
   const declares = aDeclarer;
   try {
-    const reponse = await fetch(`${TABLEAU}/api/pouls`, {
+    const reponse = await fetch(`${TABLEAU}/api/pulse`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

@@ -90,7 +90,7 @@ def _envoyer_pouls():
     a_encaisser = 0
     try:
         requete = urllib.request.Request(
-            f"{TABLEAU}/api/pouls",
+            f"{TABLEAU}/api/pulse",
             data=corps,
             headers={"Content-Type": "application/json"},
             method="POST",
