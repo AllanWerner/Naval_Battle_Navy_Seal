@@ -1,0 +1,118 @@
+{
+  "uid": "quiz-flotte-diagnostic",
+  "title": "Quiz - Diagnostic flotte",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Trafic recu",
+      "description": "Est-ce que chaque service recoit du trafic ?",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (job) (rate(http_requests_total[1m]))",
+          "legendFormat": "{{job}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqps" }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Reponses et latence",
+      "description": "Est-ce que le service repond, et en combien de temps ?",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (job, le) (rate(http_request_duration_seconds_bucket[1m])))",
+          "legendFormat": "p95 {{job}}"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (job) (rate(http_requests_total{status=~\"5..\"}[1m]))",
+          "legendFormat": "5xx/s {{job}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Dependances",
+      "description": "Base et API vues par les services. 1 = OK, 0 = KO.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "quiz_api_base_joignable{job=\"quiz-api\"}",
+          "legendFormat": "api -> postgres"
+        },
+        {
+          "refId": "B",
+          "expr": "quiz_front_api_joignable{job=\"quiz-front\"}",
+          "legendFormat": "front -> api"
+        },
+        {
+          "refId": "C",
+          "expr": "quiz_scores_base_joignable{job=\"quiz-scores\"}",
+          "legendFormat": "scores -> postgres"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 1,
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "KO", "color": "red" },
+                "1": { "text": "OK", "color": "green" }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Versions et exemplaires",
+      "description": "Quelle version tourne, et combien d'exemplaires repondent ?",
+      "type": "table",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count by (job) (up{job=~\"quiz-api|quiz-front|quiz-scores\"} == 1)",
+          "legendFormat": "exemplaires {{job}}",
+          "instant": true
+        },
+        {
+          "refId": "B",
+          "expr": "service_version_info{job=~\"quiz-api|quiz-front|quiz-scores\"}",
+          "legendFormat": "{{job}} {{version}}",
+          "instant": true
+        }
+      ]
+    }
+  ]
+}
