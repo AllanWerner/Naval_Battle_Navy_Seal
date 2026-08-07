@@ -56,6 +56,14 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      # Readiness honnete : l'API n'est saine que si elle joint vraiment
+      # Postgres. Une base coupee doit donc rendre ce conteneur unhealthy.
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:4000/sante', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
     networks: [quiznet]
     restart: unless-stopped
 
@@ -72,6 +80,14 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      # Meme logique que l'API : ce service lit la base, donc /sante doit
+      # echouer si Postgres n'est plus joignable.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/sante')"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
     networks: [quiznet]
     restart: unless-stopped
 
@@ -88,6 +104,14 @@ services:
       # Pas "service_healthy" : le front doit demarrer sans son API et
       # afficher sa page degradee. L'attendre masquerait ce comportement.
       - api
+    healthcheck:
+      # Liveness locale : le front reste healthy si l'API tombe, car il sait
+      # afficher une page degradee. /sante, elle, nomme l'etat de l'API.
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
     networks: [quiznet]
     restart: unless-stopped
 
