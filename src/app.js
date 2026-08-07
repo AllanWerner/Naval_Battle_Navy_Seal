@@ -5,6 +5,7 @@ const taskRoutes = require('./routes/tasks');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const db = require('./models');
 const { register, metricsMiddleware } = require('./metrics');
+const { demarrerLePouls } = require('./pouls');
 
 const app = express();
 
@@ -28,6 +29,13 @@ app.get('/metrics', async (req, res) => {
 // afin que le conteneur de l'API soit "healthy" indépendamment de Postgres.
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date() });
+});
+
+// Route de travail : ce que le pouls encaisse quand le tableau ordonne des
+// coups. Vide pour l'instant (palier 4 lui donnera un vrai coût mesurable),
+// mais doit exister dès maintenant sinon le pouls encaisse 0 en silence.
+app.get('/travail', (req, res) => {
+  res.sendStatus(200);
 });
 
 // Readiness : reflète l'état réel de la connexion à la base de données.
@@ -79,6 +87,10 @@ if (require.main === module) {
   // si Postgres n'est pas encore là, l'API reste up et /health reste OK ;
   // /ready et /api/* renverront 503 jusqu'à ce que la connexion réussisse.
   db.connectWithRetry();
+
+  // Pouls vers le tableau de la classe : indépendant de la DB, ne bloque pas
+  // le démarrage du serveur.
+  demarrerLePouls();
 
   // Gestion des erreurs non capturées (bugs applicatifs réels, pas les
   // erreurs de connexion DB qui sont gérées par connectWithRetry)
