@@ -46,6 +46,7 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       PAVILLON_FICHIER: /data/pavillon.txt
+      VERSION: ${TAG:-dev}
       # Le nom du carre au tableau, et l'adresse ou ce service se tape
       # lui-meme pour encaisser les coups. Les trois services partagent le
       # meme .env : sans ces deux lignes, ils se declareraient tous "api".
@@ -84,6 +85,7 @@ services:
       SERVICE: scores
       URL_INTERNE: http://localhost:8000
       PAVILLON_FICHIER: /data/pavillon.txt
+      VERSION: ${TAG:-dev}
     volumes:
       # En lecture seule : scores affiche le pavillon au tableau, c'est l'API
       # qui l'ecrit. Sans ce montage, son carre serait le seul sans pavillon.
@@ -117,6 +119,7 @@ services:
       SERVICE: front
       URL_INTERNE: http://localhost:3000
       PAVILLON_FICHIER: /data/pavillon.txt
+      VERSION: ${TAG:-dev}
     volumes:
       - pavillon:/data:ro
     ports:

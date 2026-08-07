@@ -50,6 +50,16 @@ base_joignable = Gauge(
 joueurs_classes = Gauge(
     "quiz_scores_joueurs", "Nombre de joueurs presents au classement"
 )
+service_version_info = Gauge(
+    "service_version_info",
+    "Version applicative exposee par le service",
+    ["service", "version"],
+)
+
+base_joignable.set(0)
+service_version_info.labels(
+    os.environ.get("SERVICE", "scores"), os.environ.get("VERSION") or os.environ.get("TAG", "dev")
+).set(1)
 
 
 @app.middleware("http")

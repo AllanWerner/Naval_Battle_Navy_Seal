@@ -2,8 +2,26 @@ global:
   scrape_interval: 5s
 
 scrape_configs:
-  - job_name: todo-api
-    static_configs:
-      # "api" : nom du service Compose (docker-compose.prod.yml), résolu
-      # par le network tasknetwork partagé avec le conteneur Prometheus.
-      - targets: ['api:4000']
+  # DNS SD garde un target Prometheus par IP retournee par Docker. Quand
+  # `docker compose up -d --scale api=3` ajoute des replicas, le panneau
+  # "exemplaires" voit donc les trois API au lieu d'un seul nom rond-robin.
+  - job_name: quiz-api
+    dns_sd_configs:
+      - names: ['api']
+        type: A
+        port: 4000
+        refresh_interval: 5s
+
+  - job_name: quiz-front
+    dns_sd_configs:
+      - names: ['front']
+        type: A
+        port: 3000
+        refresh_interval: 5s
+
+  - job_name: quiz-scores
+    dns_sd_configs:
+      - names: ['scores']
+        type: A
+        port: 8000
+        refresh_interval: 5s

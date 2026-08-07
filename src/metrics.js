@@ -27,6 +27,22 @@ const reponsesTotal = new client.Counter({
   registers: [register]
 });
 
+const baseJoignable = new client.Gauge({
+  name: 'quiz_api_base_joignable',
+  help: '1 si quiz-api joint Postgres, 0 sinon',
+  registers: [register]
+});
+
+const serviceVersionInfo = new client.Gauge({
+  name: 'service_version_info',
+  help: 'Version applicative exposee par le service',
+  labelNames: ['service', 'version'],
+  registers: [register]
+});
+
+baseJoignable.set(0);
+serviceVersionInfo.labels(process.env.SERVICE || 'api', process.env.VERSION || process.env.TAG || 'dev').set(1);
+
 // L'identifiant d'une question ne doit jamais devenir un label (cardinalite
 // non bornee). On utilise le pattern de route matché par Express
 // (ex. "/api/score/:pseudo"), pas l'URL brute. Pour les 404 "route inconnue"
@@ -63,5 +79,6 @@ function metricsMiddleware(req, res, next) {
 module.exports = {
   register,
   metricsMiddleware,
-  reponsesTotal
+  reponsesTotal,
+  baseJoignable
 };
