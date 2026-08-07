@@ -46,6 +46,11 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       PAVILLON_FICHIER: /data/pavillon.txt
+      # Le nom du carre au tableau, et l'adresse ou ce service se tape
+      # lui-meme pour encaisser les coups. Les trois services partagent le
+      # meme .env : sans ces deux lignes, ils se declareraient tous "api".
+      SERVICE: api
+      URL_INTERNE: http://localhost:4000
     volumes:
       # Le pavillon survit au redeploiement parce qu'il vit ici, et pas
       # dans le systeme de fichiers du conteneur.
@@ -68,6 +73,13 @@ services:
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
+      SERVICE: scores
+      URL_INTERNE: http://localhost:8000
+      PAVILLON_FICHIER: /data/pavillon.txt
+    volumes:
+      # En lecture seule : scores affiche le pavillon au tableau, c'est l'API
+      # qui l'ecrit. Sans ce montage, son carre serait le seul sans pavillon.
+      - pavillon:/data:ro
     ports:
       - "8000:8000"
     depends_on:
@@ -79,9 +91,18 @@ services:
   front:
     container_name: quiz-front
     image: ${REGISTRY:-gabrielmartin09}/quiz-front:${TAG:-latest}
+    # Ajoute pour le pouls : GROUPE, COULEUR, TABLEAU_URL et VERSION vivent
+    # dans le .env. Le front n'en lisait rien jusqu'ici.
+    env_file:
+      - .env
     environment:
       PORT: 3000
       API_URL: http://api:4000
+      SERVICE: front
+      URL_INTERNE: http://localhost:3000
+      PAVILLON_FICHIER: /data/pavillon.txt
+    volumes:
+      - pavillon:/data:ro
     ports:
       # Le seul port que la classe atteint reellement.
       - "3000:3000"

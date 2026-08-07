@@ -16,7 +16,16 @@ import psycopg2
 from fastapi import FastAPI, HTTPException, Query, Response
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
 
+from pouls import demarrer_le_pouls
+
 app = FastAPI(title="quiz-scores")
+
+
+@app.on_event("startup")
+def demarrage():
+    """Le pouls part une fois uvicorn pret a servir : il tape sa propre route
+    /travail, qui n'existe pas encore avant."""
+    demarrer_le_pouls()
 
 TABLE_REPONSES = "Reponses"
 TABLE_QUESTIONS = "Questions"
